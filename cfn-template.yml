@@ -37,6 +37,11 @@ Resources:
           RequireLowercase: true
           RequireNumbers: true
           RequireSymbols: true
+      LambdaConfig:
+        DefineAuthChallenge: !GetAtt DefineAuthChallengeLambdaFunction.Arn
+        CreateAuthChallenge: !GetAtt CreateAuthChallengeLambdaFunction.Arn
+        VerifyAuthChallengeResponse: !GetAtt VerifyAuthChallengeLambdaFunction.Arn
+
   
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -47,7 +52,8 @@ Resources:
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
-
+        - ALLOW_CUSTOM_AUTH
+        
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -315,6 +321,78 @@ Resources:
         Variables:
           USERS_TABLE: usersTable
           COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+
+  DefineAuthChallengeLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DefineAuthChallengeLambda
+      Runtime: nodejs24.x
+      Handler: handler/defineAuthChallenge.authChallenge
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket 
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+  
+  CreateAuthChallengeLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CreateAuthChallengeLambda
+      Runtime: nodejs24.x
+      Handler: handler/createAuthChallenge.createAuth
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey 
+      Timeout: 30
+      MemorySize: 128
+
+  VerifyAuthChallengeLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: VerifyAuthChallengeLambda
+      Runtime: nodejs24.x
+      Handler: handler/verifyAuthChallenge.verifyAuth
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code: 
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+
+  CustomAuthLoginLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CustomAuthLoginLambda
+      Runtime: nodejs24.x
+      Handler: handler/customAuthlogin.authLogin
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+  
+  VerifyOTPLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: VerifyOTPLambda
+      Runtime: nodejs24.x
+      Handler: handler/verifyOtp.verifyOtp
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+
   # ---------------------------
   # HTTP API Gateway
   # ---------------------------
@@ -382,6 +460,23 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LoginUsersLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
+
+  CustomLoginAuthApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CustomAuthLoginLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+  
+  VerifyOTPApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VerifyOTPLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+
   # ---------------------------
   # Routes
   # ---------------------------
@@ -419,7 +514,7 @@ Resources:
       ApiId: !Ref LambdaHttpApi
       RouteKey: PUT /updateuser
       Target: !Sub integrations/${UpdateUsersApiIntegration}
-  
+
   DeleteUsersApiRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -434,7 +529,20 @@ Resources:
       RouteKey: POST /loginusers
       Target: !Sub integrations/${LoginUsersApiIntegration}
   
-
+  CustomAuthApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /customauth
+      Target: !Sub integrations/${CustomLoginAuthApiIntegration}
+  
+  VerifyOTPApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /verifyotp
+      Target: !Sub integrations/${VerifyOTPApiIntegration}
+  
   # ---------------------------
   # Stage
   # ---------------------------
@@ -503,6 +611,53 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+  
+  CustomAuthLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CustomAuthLoginLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+  
+  VerifyOTPLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VerifyOTPLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+
+  DefineAuthLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DefineAuthChallengeLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+  
+  CreateAuthLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateAuthChallengeLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+  
+  VerifyAuthLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VerifyAuthChallengeLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+      
+      
+
+
+
+
+
 
 
 
