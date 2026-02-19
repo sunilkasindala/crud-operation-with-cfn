@@ -40,8 +40,8 @@ export const loginHandler = async (
                 PASSWORD: password
             }
         }
-        
-        const command = new InitiateAuthCommand(params) //verify the users
+
+        const command = new InitiateAuthCommand(params) //verifies the user 
         const response = await cognitoClient.send(command)
         log.info('end' + JSON.stringify(response))
 
