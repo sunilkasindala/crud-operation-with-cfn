@@ -37,6 +37,11 @@ Resources:
           RequireLowercase: true
           RequireNumbers: true
           RequireSymbols: true
+      Schema:
+        - Name: mfaEnabled
+          AttributeDataType: String
+          Mutable: true
+          Required: false
       LambdaConfig:
         DefineAuthChallenge: !GetAtt DefineAuthChallengeLambdaFunction.Arn
         CreateAuthChallenge: !GetAtt CreateAuthChallengeLambdaFunction.Arn
@@ -51,9 +56,9 @@ Resources:
       GenerateSecret: false
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
-        - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_CUSTOM_AUTH
-        
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -68,6 +73,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
       Policies:
         - PolicyName: LambdaS3Access
           PolicyDocument:
@@ -136,6 +142,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - cognito-idp:InitiateAuth
+                  - cognito-idp:AdminInitiateAuth
+                  - cognito-idp:AdminUpdateUserAttributes
                 Resource: "*"
 
         - PolicyName: CognitoSignupPolicy
@@ -146,6 +154,7 @@ Resources:
                 Action:
                   - cognito-idp:AdminCreateUser
                   - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminRespondToAuthChallenge
                 Resource: "*"
 
   # ---------------------------
@@ -163,6 +172,8 @@ Resources:
         S3Key: !Ref LambdaCodeKey
       Timeout: 10
       MemorySize: 128
+      TracingConfig:
+        Mode: Active
 
   GetUserLambdaFunction:
     Type: AWS::Lambda::Function
@@ -179,6 +190,8 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE: usersTable
+      TracingConfig:
+        Mode: Active
 
   ScanUsersLambdaFunction:
     Type: AWS::Lambda::Function
@@ -195,6 +208,8 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE: usersTable
+      TracingConfig:
+        Mode: Active
 
   CreateUsersLambdaFunction:
     Type: AWS::Lambda::Function
@@ -213,6 +228,8 @@ Resources:
           USERS_TABLE: usersTable
           NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
           USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
 
   UpdateUsersLambdaFunction:
     Type: AWS::Lambda::Function
@@ -230,6 +247,8 @@ Resources:
         Variables:
           USERS_TABLE: usersTable
           NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
+      TracingConfig:
+        Mode: Active
   
   DeleteUsersLambdaFunction:
     Type: AWS::Lambda::Function
@@ -246,6 +265,8 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE: usersTable
+      TracingConfig:
+        Mode: Active
 
   DocumentUsersLambdaFunction:
     Type: AWS::Lambda::Function
@@ -263,6 +284,8 @@ Resources:
         Variables:
           USERS_TABLE: usersTable
           NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
+      TracingConfig:
+        Mode: Active
   
   DocumentReminderRule:
     Type: AWS::Events::Rule
@@ -295,6 +318,8 @@ Resources:
         S3Key: !Ref LambdaCodeKey
       Timeout: 30
       MemorySize: 128
+      TracingConfig:
+        Mode: Active
   
 
   NotificationTrigger:
@@ -321,7 +346,9 @@ Resources:
         Variables:
           USERS_TABLE: usersTable
           COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
-
+      TracingConfig:
+        Mode: Active
+  
   DefineAuthChallengeLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -334,6 +361,8 @@ Resources:
         S3Key: !Ref LambdaCodeKey
       Timeout: 30
       MemorySize: 128
+      TracingConfig:
+        Mode: Active
   
   CreateAuthChallengeLambdaFunction:
     Type: AWS::Lambda::Function
@@ -347,6 +376,8 @@ Resources:
         S3Key: !Ref LambdaCodeKey 
       Timeout: 30
       MemorySize: 128
+      TracingConfig:
+        Mode: Active
 
   VerifyAuthChallengeLambdaFunction:
     Type: AWS::Lambda::Function
@@ -360,6 +391,8 @@ Resources:
         S3Key: !Ref LambdaCodeKey
       Timeout: 30
       MemorySize: 128
+      TracingConfig:
+        Mode: Active
 
   CustomAuthLoginLambdaFunction:
     Type: AWS::Lambda::Function
@@ -376,6 +409,9 @@ Resources:
       Environment:
         Variables:
           COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
   
   VerifyOTPLambdaFunction:
     Type: AWS::Lambda::Function
@@ -392,6 +428,29 @@ Resources:
       Environment:
         Variables:
           COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
+
+  EnableMfaLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: EnableMfaLambda
+      Runtime: nodejs24.x
+      Handler: handler/updateMfaStatus.enableMFA
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
+
 
   # ---------------------------
   # HTTP API Gateway
@@ -452,7 +511,7 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteUsersLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
-  
+
   LoginUsersApiIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -460,7 +519,7 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LoginUsersLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
-
+  
   CustomLoginAuthApiIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -476,6 +535,28 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VerifyOTPLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
+  
+  EnableMfaApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EnableMfaLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+  
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      AuthorizerType: JWT
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoUserPoolClient
+        Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
+      Name: CognitoJwtAuthorizer
+
 
   # ---------------------------
   # Routes
@@ -521,14 +602,14 @@ Resources:
       ApiId: !Ref LambdaHttpApi
       RouteKey: DELETE /deleteuser
       Target: !Sub integrations/${DeleteUsersApiIntegration}
-  
+
   LoginUsersApiRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref LambdaHttpApi
       RouteKey: POST /loginusers
       Target: !Sub integrations/${LoginUsersApiIntegration}
-  
+    
   CustomAuthApiRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -542,6 +623,15 @@ Resources:
       ApiId: !Ref LambdaHttpApi
       RouteKey: POST /verifyotp
       Target: !Sub integrations/${VerifyOTPApiIntegration}
+  
+  EnableMfaApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /updatemfa
+      Target: !Sub integrations/${EnableMfaApiIntegration}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
   
   # ---------------------------
   # Stage
@@ -603,7 +693,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
-
+  
   LoginUsersLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -651,6 +741,14 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt CognitoUserPool.Arn
+  
+  EnableMfaLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EnableMfaLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
       
       
 

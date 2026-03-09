@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda"
 
 import { call } from "../utils/dynamodbLib"

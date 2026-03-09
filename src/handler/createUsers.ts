@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { log } from "../utils/logger"
 import { AppConfig } from "../utils/appConfig";
@@ -7,11 +8,13 @@ import { randomUUID } from "crypto"
 import { isValidMobileNumber } from "../utils/validations";
 import { isValidEmail } from "../utils/validations";
 import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminSetUserPasswordCommand } from "@aws-sdk/client-cognito-identity-provider";
+import AWSXRay from "aws-xray-sdk-core"
 
-
-const cognitoClient = new CognitoIdentityProviderClient({
+const cognitoClient = AWSXRay.captureAWSv3Client(
+    new CognitoIdentityProviderClient({
     region: AppConfig.AWS_REGION
 })
+)
 
 import { call } from "../utils/dynamodbLib";
 
@@ -63,7 +66,8 @@ export const createuser = async (
             Username: email,
             UserAttributes: [
                 { Name: "email", Value: email },
-                { Name: "email_verified", Value: "true" }
+                { Name: "email_verified", Value: "true" },
+                { Name: "custom:mfaEnabled", Value: "false" }
             ],
             MessageAction: "SUPPRESS"
         };

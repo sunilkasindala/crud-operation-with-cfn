@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import { log } from "../utils/logger";
 import { AppConfig } from "../utils/appConfig";
 import { call } from "../utils/dynamodbLib"

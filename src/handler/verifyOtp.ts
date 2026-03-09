@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import {
   CognitoIdentityProviderClient,
   RespondToAuthChallengeCommand
@@ -6,9 +7,13 @@ import {
 import { AppConfig } from "../utils/appConfig";
 import { log } from "../utils/logger";
 
-const cognitoClient = new CognitoIdentityProviderClient({
-  region: AppConfig.AWS_REGION
-});
+import AWSXRay from "aws-xray-sdk-core"
+
+const cognitoClient = AWSXRay.captureAWSv3Client(
+    new CognitoIdentityProviderClient({
+    region: AppConfig.AWS_REGION
+})
+)
 
 export const verifyOtp = async (event: any) => {
   try {
@@ -36,7 +41,7 @@ export const verifyOtp = async (event: any) => {
     });
 
     const response = await cognitoClient.send(command);
-
+    
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -59,3 +64,4 @@ export const verifyOtp = async (event: any) => {
     };
   }
 };
+

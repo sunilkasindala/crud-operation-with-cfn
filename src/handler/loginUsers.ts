@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import {
     AuthFlowType,
     CognitoIdentityProviderClient,
@@ -9,10 +10,13 @@ import { log } from "../utils/logger"
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import jwt from "jsonwebtoken"
 import { call } from "../utils/dynamodbLib";
+import AWSXRay from "aws-xray-sdk-core"
 
-const cognitoClient = new CognitoIdentityProviderClient({
+const cognitoClient = AWSXRay.captureAWSv3Client(
+    new CognitoIdentityProviderClient({
     region: AppConfig.AWS_REGION
 })
+)
 
 export const loginHandler = async (
     event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -105,3 +109,4 @@ const getUserbyCognitoSub = async (sub: string) => {
     }
     return await call("query",params)
 }
+

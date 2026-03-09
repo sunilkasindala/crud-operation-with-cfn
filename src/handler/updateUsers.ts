@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import {APIGatewayProxyEvent,APIGatewayProxyResult} from "aws-lambda"
 import {call} from "../utils/dynamodbLib"
 import {log,getSegment} from "../utils/logger"
@@ -17,7 +18,7 @@ export const updateuser = async(event:APIGatewayProxyEvent):Promise<APIGatewayPr
         const body = event.body ?JSON.parse(event.body) :{};
         const {userId, name , email , mobile_no} = body;
 
-
+        
         log.info("parsed from body userId")
         log.info("parsed from body name")
         log.info("parsed from body email")

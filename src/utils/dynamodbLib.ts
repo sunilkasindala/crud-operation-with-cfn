@@ -1,7 +1,10 @@
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb')
-const { DynamoDBDocumentClient, PutCommand, ScanCommand, UpdateCommand, DeleteCommand, QueryCommand, GetCommand } = require('@aws-sdk/lib-dynamodb')
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
+import { DynamoDBDocumentClient, PutCommand, ScanCommand, UpdateCommand, DeleteCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb"
+import AWSXRay from "aws-xray-sdk-core"
 
-const client = new DynamoDBClient({})
+const client = AWSXRay.captureAWSv3Client(
+    new DynamoDBClient({})
+)
 const docClient = DynamoDBDocumentClient.from(client)
 
 const commandMap: Record<string, any> = {
