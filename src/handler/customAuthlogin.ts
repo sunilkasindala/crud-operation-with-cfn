@@ -1,63 +1,85 @@
+import "../utils/tracing"
 import {
-    AuthFlowType,
-    CognitoIdentityProviderClient,
-    InitiateAuthCommand
-} from "@aws-sdk/client-cognito-identity-provider";
-
-import { log } from "../utils/logger"
+  CognitoUser,
+  CognitoUserPool,
+  AuthenticationDetails
+} from "amazon-cognito-identity-js"
 
 import { AppConfig } from "../utils/appConfig"
-
-const cognitoClient = new CognitoIdentityProviderClient({
-    region: AppConfig.AWS_REGION
-})
+import { log } from "../utils/logger"
 
 export const authLogin = async (event: any) => {
-    try {
-        log.info("custom auth login is triggered")
+    log.info('triggerd custom auth login api')
 
-        const body = event.body ? JSON.parse(event.body) : {};
+  const body = JSON.parse(event.body)
+  const { username, password } = body
 
-        const username = body.username
-        log.info('data from the body')
-        if (!username) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({
-                    message: "username is required field"
-                })
-            }
-        }
-        const params = {
-            AuthFlow: "CUSTOM_AUTH" as AuthFlowType,
-            ClientId: AppConfig.COGNITO_CLIENT_ID,
-            AuthParameters: {
-                USERNAME: username
-                
-            }
-        }
-
-        const command = new InitiateAuthCommand(params)
-        const response = await cognitoClient.send(command)
-        log.info('response from the cognito')
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: "OTP sent",
-                session: response.Session,
-                challengeName: response.ChallengeName
-            })
-        };
-        log.info('custom_auth login api is successful')
-
-    } catch (err) {
-        log.error('login failed' + JSON.stringify(err))
-        return {
-            statusCode: 401,
-            body: JSON.stringify({
-                message: "invalid username"
-            })
-        }
+  if (!username || !password) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: "username and password required" })
     }
+  }
 
+  const poolData:any = {
+    UserPoolId: AppConfig.USER_POOL_ID,
+    ClientId: AppConfig.COGNITO_CLIENT_ID
+  }
+  log.info('check whether pooldata is having correct id or not'+JSON.stringify(poolData))
+
+  const userPool = new CognitoUserPool(poolData)
+  log.info('getting the users'+JSON.stringify(userPool))
+
+  const authenticationDetails = new AuthenticationDetails({
+    Username: username,
+    Password: password
+  })
+
+  const cognitoUser = new CognitoUser({
+    Username: username,
+    Pool: userPool
+  })
+
+  return new Promise((resolve) => {
+    //set the custom auth 
+    cognitoUser.setAuthenticationFlowType("CUSTOM_AUTH")
+
+    cognitoUser.authenticateUser(authenticationDetails, {
+
+      onSuccess: (result) => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({
+            message: "Login successful",
+            idToken: result.getIdToken().getJwtToken(),
+            accessToken: result.getAccessToken().getJwtToken(),
+            refreshToken: result.getRefreshToken().getToken()
+          })
+        })
+      },
+      
+      customChallenge: () => {
+        resolve({
+          statusCode: 200,
+          body: JSON.stringify({
+            message: "OTP required",
+            session: (cognitoUser as any).Session
+          })
+        })
+      },
+
+      onFailure: (err) => {
+        resolve({
+          statusCode: 401,
+          body: JSON.stringify({
+            message: "Login failed",
+            error: err.message
+          })
+        })
+      }
+    })
+  })
 }
+
+
+

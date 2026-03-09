@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import { SQSHandler } from "aws-lambda";
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { log } from "../utils/logger";

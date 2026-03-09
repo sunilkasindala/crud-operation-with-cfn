@@ -24,6 +24,7 @@
     "@aws-sdk/client-sns": "^3.962.0",
     "@aws-sdk/client-sqs": "^3.960.0",
     "@aws-sdk/lib-dynamodb": "^3.958.0",
+    "amazon-cognito-identity-js": "^6.3.16",
     "aws-lambda": "^1.0.7",
     "aws-xray-sdk-core": "^3.12.0",
     "jsonwebtoken": "^9.0.3",

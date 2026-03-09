@@ -1,3 +1,4 @@
+import "../utils/tracing"
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses"
 import { log } from "../utils/logger"
 import { AppConfig } from "../utils/appConfig"
@@ -8,6 +9,7 @@ const ses = new SESClient({ region: process.env.AWS_REGION })
 export const createAuth = async (event: any) => {
     try {
         log.info("createauth challenge is triggered")
+        const session = event.request.session ||[];
         //only if challenge is correct then it enters into this logic 
         if (event.request.challengeName === "CUSTOM_CHALLENGE") {
 
@@ -18,6 +20,13 @@ export const createAuth = async (event: any) => {
             event.response.privateChallengeParameters = {
                 answer: otp
             }
+
+            event.response.publicChallengeParameters = {
+            email: event.request.userAttributes.email
+            }
+
+            event.response.challengeMetadata = "OTP_CHALLENGE"
+
 
             const email = event.request.userAttributes.email
             
@@ -46,6 +55,4 @@ export const createAuth = async (event: any) => {
         log.error("Error in CreateAuthChallenge" + JSON.stringify(err));
         throw err;
     }
-
-
 }
