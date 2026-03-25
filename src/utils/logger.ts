@@ -22,10 +22,10 @@ export let log = parentLogger;
  */
 export function setAwsRequestIdForLogger(event: any, context: any): void {
   const AmznTraceId = event.headers === undefined ? null : event.headers["X-Amzn-Trace-Id"];
-  const awsRequestId = context === undefined ? null : context.awsRequestId;
-  const logSource = event.logSource == undefined ? "web" : event.logSource; //find way for get info
-  const logGroupName = context === undefined ? null : context.logGroupName;
-  const logStreamName = context === undefined ? null : context.logStreamName;
+  const awsRequestId = context?.awsRequestId ?? null; // Use ?? for null if undefined
+  const logSource = event.logSource == undefined ? "web" : event.logSource;
+  const logGroupName = context?.logGroupName ?? null; // Use ?? for null if undefined
+  const logStreamName = context?.logStreamName ?? null; // Use ?? for null if undefined
   const headers = event.headers;
 
   log = parentLogger.child({ AmznTraceId, awsRequestId, logSource, logGroupName, logStreamName, headers });

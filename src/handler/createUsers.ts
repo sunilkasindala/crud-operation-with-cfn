@@ -87,13 +87,13 @@ export const createuser = async (
         log.info("Extracted cognitoSub: " + cognitoSub);
 
         // set the password for created user
-        const setpasswordParams: any = {
+        const setpass: any = {
             UserPoolId: AppConfig.USER_POOL_ID,
             Username: email,
             Password: password,
             Permanent: true
         }
-        const cmd = new AdminSetUserPasswordCommand(setpasswordParams)
+        const cmd = new AdminSetUserPasswordCommand(setpass)
         const res = await cognitoClient.send(cmd)
 
         const userId = randomUUID();
