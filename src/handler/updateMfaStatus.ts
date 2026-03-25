@@ -30,7 +30,7 @@ export const enableMFA = async (event: any) => {
             return {
                 statusCode: 200,
                 body: JSON.stringify({
-                    message: " mfa is enabled successfully"
+                    message: `MFA is ${mfaEnabled ? 'enabled' : 'disabled'} successfully`
                 })
             }
 

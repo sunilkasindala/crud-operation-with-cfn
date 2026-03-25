@@ -16,22 +16,37 @@ jest.mock("@aws-sdk/client-sns", () => ({
 
 jest.mock("uuid", () => ({ v4: () => "test-uuid" }));
 
+// Add mock for Cognito
+const cognitoSendMock = jest.fn().mockResolvedValue({});
+jest.mock("@aws-sdk/client-cognito-identity-provider", () => ({
+  CognitoIdentityProviderClient: jest.fn(() => ({ send: cognitoSendMock })),
+  AdminCreateUserCommand: jest.fn(),
+  AdminSetUserPasswordCommand: jest.fn()
+}));
+
+// Mock AWS X-Ray to avoid issues
+jest.mock("aws-xray-sdk-core", () => ({
+  captureAWSv3Client: jest.fn((client) => client),
+  captureHTTPsGlobal: jest.fn()
+}));
 
 import { mockClient } from "aws-sdk-client-mock";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { createuser } from "../handler/createUsers";
 import { log, setAwsRequestIdForLogger } from "../utils/logger";
+import { captureHTTPsGlobal } from "aws-xray-sdk-core";
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 
-describe('test cases', () => {
+describe.only('test cases', () => {
   beforeEach(() => {
     ddbMock.reset();
-    sqsSendMock.mockClear();//clear mock calls before each test
+    sqsSendMock.mockClear();
     snsSendMock.mockClear();
+    cognitoSendMock.mockClear();
   });
 
-  describe('createuser lambda function', () => {
+  describe.only('createuser lambda function', () => {
     //test case for missing fields
     it('should return 400 if the required fields are missing', async () => {
       //arrange
@@ -44,7 +59,7 @@ describe('test cases', () => {
       //assert
       expect(res.statusCode).toBe(400)
       const response = JSON.parse(res.body)
-      expect(response.message).toBe('name ,email and mobile_no are required')
+      expect(response.message).toBe("name, email, mobile_no and password are required");
 
     })
     //test case for invalid email format
@@ -54,7 +69,8 @@ describe('test cases', () => {
         body: JSON.stringify({
           name: "sunil",
           email: "invalid-email",
-          mobile_no: "+918328465116"
+          mobile_no: "+918328465116",
+          password: "password123"
         })
       }
       //act
@@ -63,7 +79,7 @@ describe('test cases', () => {
       //assert
       expect(res.statusCode).toBe(400)
       const response = JSON.parse(res.body)
-      expect(response.message).toBe("invalid email format")
+      expect(response.message).toBe("Invalid email")
     })
     //test case for invalid mobile_no
     it('should return 400 if mobile_no is invalid', async () => {
@@ -72,7 +88,8 @@ describe('test cases', () => {
         body: JSON.stringify({
           name: 'sunil',
           email: 'sunil316@gmail.com',
-          mobile_no: "+2378698056591"
+          mobile_no: "+2378698056591",
+          password: "password123"
         })
       }
       //act
@@ -80,7 +97,7 @@ describe('test cases', () => {
       //assert
       expect(res.statusCode).toBe(400)
       const response = JSON.parse(res.body)
-      expect(response.message).toBe('Invalid mobile number format')
+      expect(response.message).toBe('Invalid mobile number')
     })
     //test case for checking existing email
     it('should return 400 if email already exists', async () => {
@@ -92,7 +109,8 @@ describe('test cases', () => {
         body: JSON.stringify({
           name: "sunil",
           email: "sunil@gmail.com",
-          mobile_no: "+918328465116"
+          mobile_no: "+918328465116",
+          password: "password123"
         })
       }
       //act
@@ -100,7 +118,7 @@ describe('test cases', () => {
       //assert
       expect(res.statusCode).toBe(400)
       const response = JSON.parse(res.body)
-      expect(response.message).toBe('email already exists')
+      expect(response.message).toBe('Email already exists')
     })
     //test case for checking existing mobile_no
     it('should return 400 if mobile_no already exists', async () => {
@@ -114,7 +132,8 @@ describe('test cases', () => {
         body: JSON.stringify({
           name: "sunil",
           email: "sunil@gmail.com",
-          mobile_no: "+919999999999"
+          mobile_no: "+919999999999",
+          password: "password123"
         })
       }
       //act
@@ -122,30 +141,45 @@ describe('test cases', () => {
 
       //assert
       expect(res.statusCode).toBe(400)
+      const response = JSON.parse(res.body)
+      expect(response.message).toBe('Mobile already exists')
     })
     //test case for creating the user and mocking 
     it('return 201 if the user is created', async () => {
       ddbMock.on(QueryCommand).resolves({ Items: [] });
-      ddbMock.on(QueryCommand).resolves({ Items: [] });
       ddbMock.on(PutCommand).resolves({})
+      // Mock Cognito responses
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [{ Name: "sub", Value: "test-sub" }]
+        }
+      }); // AdminCreateUserCommand
+      cognitoSendMock.mockResolvedValueOnce({}); // AdminSetUserPasswordCommand
       //arrange
       const event: any = {
-        body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116" })
+        body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116", password: "password123" })
       }
       //act 
       const result = await createuser(event)
       //assert
       expect(result.statusCode).toBe(201)
       const response = JSON.parse(result.body)
-      expect(response.message).toBe('user is created successfully')
+      expect(response.message).toBe('User created successfully')
     })
 
     it('should return 500 if it throws error', async () => {
       ddbMock.on(QueryCommand).resolves({ Items: [] })
       ddbMock.on(PutCommand).rejects(new Error('DB error'))
+      // Mock Cognito to succeed so we reach DB error
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [{ Name: "sub", Value: "test-sub" }]
+        }
+      });
+      cognitoSendMock.mockResolvedValueOnce({});
       //arrange
       const event: any = {
-        body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116" })
+        body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116", password: "password123" })
       }
 
       //act 
@@ -153,23 +187,30 @@ describe('test cases', () => {
       //assert
       expect(result.statusCode).toBe(500)
       const response = JSON.parse(result.body)
-      expect(response.message).toBe("internal server error")
+      expect(response.message).toBe("Internal server error")
     })
     it("should trigger both SQS and SNS when QUEUE_URL and mobile_no are present", async () => {
       ddbMock.on(QueryCommand).resolves({ Items: [] });
       ddbMock.on(PutCommand).resolves({});
+      // Mock Cognito
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [{ Name: "sub", Value: "test-sub" }]
+        }
+      });
+      cognitoSendMock.mockResolvedValueOnce({});
 
       process.env.NOTIFICATION_QUEUE_URL = "test-queue";
 
       const event: any = {
-        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999" })
+        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999", password: "password123" })
       };
 
       const result = await createuser(event);
       console.log("result",result)
       expect(result.statusCode).toBe(201);
       const response = JSON.parse(result.body);
-      expect(response.message).toBe("user is created successfully");
+      expect(response.message).toBe("User created successfully");
 
       //Confirm triggers were called
       expect(sqsSendMock).toHaveBeenCalled();
@@ -178,6 +219,13 @@ describe('test cases', () => {
     it("should log error if SQS send fails", async () => {
       ddbMock.on(QueryCommand).resolves({ Items: [] });
       ddbMock.on(PutCommand).resolves({});
+      // Mock Cognito to succeed
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [{ Name: "sub", Value: "test-sub" }]
+        }
+      });
+      cognitoSendMock.mockResolvedValueOnce({});
 
       // Make SQS send fail
       sqsSendMock.mockRejectedValueOnce(new Error("SQS failed"));
@@ -188,7 +236,7 @@ describe('test cases', () => {
       const logSpy = jest.spyOn(log, "error").mockImplementation(() => { }); // mock implementation to suppress actual logging
 
       const event: any = {
-        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999" })
+        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999", password: "password123" })
       };
 
       await createuser(event);
@@ -204,6 +252,13 @@ describe('test cases', () => {
     it("should log error if SNS publish fails", async () => {
       ddbMock.on(QueryCommand).resolves({ Items: [] });
       ddbMock.on(PutCommand).resolves({});
+      // Mock Cognito to succeed
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [{ Name: "sub", Value: "test-sub" }]
+        }
+      });
+      cognitoSendMock.mockResolvedValueOnce({});
 
       // Make SNS send fail
       snsSendMock.mockRejectedValueOnce(new Error("SNS failed"));
@@ -214,7 +269,7 @@ describe('test cases', () => {
       const logSpy = jest.spyOn(log, "error").mockImplementation(() => { });
 
       const event: any = {
-        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999" })
+        body: JSON.stringify({ name: "sunil", email: "sunil@gmail.com", mobile_no: "+919999999999", password: "password123" })
       };
 
       await createuser(event);
