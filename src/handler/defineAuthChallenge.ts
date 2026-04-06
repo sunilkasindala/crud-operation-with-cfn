@@ -32,7 +32,7 @@ export const authChallenge = async (event: any) => {
       log.info("Password verified.");
       const IsmfaEnabled = event.request.userAttributes["custom:mfaEnabled"] === "true";
       // If MFA disabled → directly issue tokens
-      if(!IsmfaEnabled){
+      if (!IsmfaEnabled) {
         log.info("MFA disabled. Issuing tokens directly.");
         event.response.issueTokens = true;
         event.response.failAuthentication = false;
@@ -58,6 +58,34 @@ export const authChallenge = async (event: any) => {
       return event;
     }
 
+    //Step 3.1: After OTP failure OR resend → retry challenge
+    if (
+      lastChallenge &&
+      lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
+      lastChallenge.challengeResult === false
+    ) {
+      log.info("OTP incorrect or resend triggered. Retrying challenge");
+      //count the number of attempts from the session
+      const failedAttempts = session.filter((challenge:any) => 
+        challenge.challengeName === "CUSTOM_CHALLENGE" &&
+        challenge.challengeResult === false
+      ).length;
+      log.info("failed otp attempts:" + failedAttempts);
+
+      //count the number of resend attempts
+      if(failedAttempts > 3){
+        log.info("maximaum otp attempts reached -> failing authentication");
+        event.response.issueTokens = false;
+        event.response.failAuthentication = true;
+        return event;
+      }
+      //retry otp
+      event.response.issueTokens = false;
+      event.response.failAuthentication = false;
+      event.response.challengeName = "CUSTOM_CHALLENGE";
+      return event;
+    }
+
     //Fail otherwise
     log.info("Authentication failed");
     event.response.issueTokens = false;
@@ -69,67 +97,3 @@ export const authChallenge = async (event: any) => {
     throw err;
   }
 };
-
-// export const handler = async (event: any) => {
-//     try {
-//         log.info('define auth trigger is called')
-//         const session = event.request.session || [];
-//         const lastChallenge = session[session.length - 1];
-
-//         // Step 0 → Start SRP
-//         if (session.length === 0) {
-//             event.response = {
-//                 challengeName: "SRP_A",
-//                 issueTokens: false,
-//                 failAuthentication: false,
-//             };
-//         }
-
-//         // Step 1 → Password verification
-//         else if (
-//             lastChallenge.challengeName === "SRP_A" &&
-//             lastChallenge.challengeResult === true
-//         ) {
-//             event.response = {
-//                 challengeName: "PASSWORD_VERIFIER",
-//                 issueTokens: false,
-//                 failAuthentication: false,
-//             };
-//         }
-
-//         // Step 2 → Password correct → trigger OTP
-//         else if (
-//             lastChallenge.challengeName === "PASSWORD_VERIFIER" &&
-//             lastChallenge.challengeResult === true
-//         ) {
-//             event.response = {
-//                 challengeName: "CUSTOM_CHALLENGE",
-//                 issueTokens: false,
-//                 failAuthentication: false,
-//             };
-//         }
-
-//         // Step 3 → OTP correct → issue tokens
-//         else if (
-//             lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
-//             lastChallenge.challengeResult === true
-//         ) {
-//             event.response = {
-//                 issueTokens: true,
-//                 failAuthentication: false,
-//             };
-//         }
-
-//         else {
-//             event.response = {
-//                 issueTokens: false,
-//                 failAuthentication: true,
-//             };
-//         }
-
-//         return event;
-
-//     } catch (err) {
-//         log.info('error in define auth lambda' + JSON.stringify(err))
-//     }
-// };

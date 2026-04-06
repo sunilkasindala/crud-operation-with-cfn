@@ -42,6 +42,10 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: false
+        - Name: otpResent
+          AttributeDataType: String
+          Mutable: true
+          Required: false
       LambdaConfig:
         DefineAuthChallenge: !GetAtt DefineAuthChallengeLambdaFunction.Arn
         CreateAuthChallenge: !GetAtt CreateAuthChallengeLambdaFunction.Arn
@@ -103,6 +107,7 @@ Resources:
                   - arn:aws:dynamodb:ap-southeast-2:689295100099:table/usersTable/index/mobile-index
                   - arn:aws:dynamodb:ap-southeast-2:689295100099:table/usersTable/index/documentSubmitted-userId-index
                   - arn:aws:dynamodb:ap-southeast-2:689295100099:table/usersTable/index/cognito-index
+                  - arn:aws:dynamodb:ap-southeast-2:689295100099:table/otpTrackingTable
 
         - PolicyName: LambdaSQSAccess
           PolicyDocument:
@@ -376,6 +381,10 @@ Resources:
         S3Key: !Ref LambdaCodeKey 
       Timeout: 30
       MemorySize: 128
+      Environment:
+        Variables:
+          OTP_TABLE: otpTrackingTable
+          USERS_TABLE: usersTable
       TracingConfig:
         Mode: Active
 
@@ -391,6 +400,9 @@ Resources:
         S3Key: !Ref LambdaCodeKey
       Timeout: 30
       MemorySize: 128
+      Environment:
+        Variables:
+          OTP_TABLE: otpTrackingTable
       TracingConfig:
         Mode: Active
 
@@ -448,6 +460,27 @@ Resources:
         Variables:
           COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
           USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
+  
+  ResendOtpLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ResendOtpLambda
+      Runtime: nodejs24.x
+      Handler: handler/ResendOtp.resendOtp
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USERS_TABLE: usersTable
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+          OTP_TABLE: otpTrackingTable
       TracingConfig:
         Mode: Active
 
@@ -556,6 +589,14 @@ Resources:
           - !Ref CognitoUserPoolClient
         Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
       Name: CognitoJwtAuthorizer
+  
+  ResendOtpApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResendOtpLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
 
 
   # ---------------------------
@@ -632,6 +673,14 @@ Resources:
       Target: !Sub integrations/${EnableMfaApiIntegration}
       AuthorizationType: JWT
       AuthorizerId: !Ref CognitoAuthorizer
+  
+  ResendOtpApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /resendotp
+      Target: !Sub integrations/${ResendOtpApiIntegration}
+
   
   # ---------------------------
   # Stage
@@ -746,6 +795,14 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref EnableMfaLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+  
+  ResendOtpLambdaPermission:
+    Type: AWS::Lambda::Permission 
+    Properties:
+      FunctionName: !Ref ResendOtpLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*

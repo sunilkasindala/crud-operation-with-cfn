@@ -41,14 +41,25 @@ export const verifyOtp = async (event: any) => {
     });
 
     const response = await cognitoClient.send(command);
-    
+
+    if (response.AuthenticationResult) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: "Login successful",
+          idToken: response.AuthenticationResult.IdToken,
+          accessToken: response.AuthenticationResult.AccessToken,
+          refreshToken: response.AuthenticationResult.RefreshToken
+        })
+      };
+    }
+
     return {
-      statusCode: 200,
+      statusCode: 400,
       body: JSON.stringify({
-        message: "Login successful",
-        idToken: response.AuthenticationResult?.IdToken,
-        accessToken: response.AuthenticationResult?.AccessToken,
-        refreshToken: response.AuthenticationResult?.RefreshToken
+        message: "OTP verification failed or additional challenge required",
+        challengeName: response.ChallengeName,
+        session: response.Session
       })
     };
 
@@ -58,8 +69,7 @@ export const verifyOtp = async (event: any) => {
     return {
       statusCode: 401,
       body: JSON.stringify({
-        message: "Invalid OTP",
-        error: error.message
+        message: "Invalid OTP"
       })
     };
   }
