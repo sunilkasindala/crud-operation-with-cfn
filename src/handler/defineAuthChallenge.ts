@@ -28,6 +28,7 @@ export const authChallenge = async (event: any) => {
       lastChallenge &&
       lastChallenge.challengeName === "PASSWORD_VERIFIER" &&
       lastChallenge.challengeResult === true
+
     ) {
       log.info("Password verified.");
       const IsmfaEnabled = event.request.userAttributes["custom:mfaEnabled"] === "true";
@@ -38,20 +39,36 @@ export const authChallenge = async (event: any) => {
         event.response.failAuthentication = false;
         return event;
       }
-      //if MFA enabled -> then generate otp 
+      //if MFA enabled -> then ask user to select MFA 
+      log.info("MFA is enabled -> asking user to select Mfa type")
       event.response.issueTokens = false;
       event.response.failAuthentication = false;
       event.response.challengeName = "CUSTOM_CHALLENGE";
       return event;
     }
 
-    //Step 3: After OTP success → issue tokens
+    //Step 3: once user selected mfa type --> then move to otp  → issue tokens
     if (
       lastChallenge &&
       lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
-      lastChallenge.challengeResult === true
+      lastChallenge.challengeResult === true &&
+      lastChallenge.challengeMetadata === "SELECT_MFA"
     ) {
-      log.info("OTP verified. Issuing tokens");
+      log.info("selected mfa type --> move to otp");
+
+      event.response.issueTokens = false;
+      event.response.failAuthentication = false;
+      event.response.challengeName = "CUSTOM_CHALLENGE"
+      return event;
+    }
+    //step 4: if otp is success --> then issue tokens 
+    if(
+      lastChallenge && 
+      lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
+      lastChallenge.challengeResult === true &&
+      lastChallenge.challengeMetadata === "OTP_CHALLENGE"
+    ){
+      log.info("OTP verified issuing tokens")
 
       event.response.issueTokens = true;
       event.response.failAuthentication = false;

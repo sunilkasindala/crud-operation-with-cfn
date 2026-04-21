@@ -7,6 +7,19 @@ export const verifyAuth = async (event: any) => {
     try {
         log.info('verify auth is triggered')
 
+        const metadata = event.request.challengeMetadata
+        //step1 --> validate mfa selection
+        if(metadata === "SELECT_MFA"){
+            const selected = event.request.challengeAnswer;// this is the mfa type selected by the user 
+            if(selected === "EMAIL" || selected === "SMS"){
+                event.response.answerCorrect = true;
+            }else{
+                event.response.answerCorrect = false; 
+            }
+            return event;
+        }
+
+        //step2 --> resend 
         const isResend = event.request.clientMetadata?.resend === "true";
         log.info("verify auth is triggered, isResend: " + isResend)
 

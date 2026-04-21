@@ -15,13 +15,13 @@ export const resendOtp = async (event: any) => {
         log.info("resend otp api is triggered")
 
         const body = JSON.parse(event.body);
-        const { username, session } = body;
+        const { username, session , mfaType} = body;
 
-        if (!username || !session) {
+        if (!username || !session || !mfaType) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
-                    message: "username and session are required"
+                    message: "username, session and mfaType are required"
                 })
             }
         }
@@ -45,9 +45,11 @@ export const resendOtp = async (event: any) => {
         })
 
         const now = Date.now(); // current timestamp in milliseconds
-        if (!otpData.Item) {
-            throw new Error("OTP not found for the user");
-        }
+        //this is required when we are storing otp in the db 
+        // if (!otpData.Item) {
+        //     throw new Error("OTP not found for the user");
+        // }
+
         const lastResendTime = otpData.Item.lastResendTime || 0; // default to 0 if not set
         const resendCount = otpData.Item.resendCount || 0; // default to 0 if not set
 
@@ -62,7 +64,6 @@ export const resendOtp = async (event: any) => {
         }
         //max 3 resends attempts allowed
         if (resendCount > 3) {
-
             return {
                 statusCode: 400,
                 body: JSON.stringify({
@@ -92,7 +93,8 @@ export const resendOtp = async (event: any) => {
                 ANSWER: "resend" // dummy answer to trigger resend of OTP
             },
             ClientMetadata: {
-                resend: "true"
+                resend: "true",
+                mfaType: mfaType
             }
         })
         const response = await cognitoClient.send(command)
@@ -104,15 +106,7 @@ export const resendOtp = async (event: any) => {
                 session: response.Session
             })
         }
-    } catch (err: any) {
-        log.error("error in resending the otp" + JSON.stringify(err))
-        if (err.name === "NotAuthorizedException") {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({
-                    message: "Maximum resend attempts reached. Please try again later."
-                })
-            }
-        }
+    } catch(err){
+        log.info("error in selecting mfa type"+JSON.stringify(err))
     }
 }
