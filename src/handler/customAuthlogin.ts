@@ -62,7 +62,7 @@ export const authLogin = async (event: any) => {
         resolve({
           statusCode: 200,
           body: JSON.stringify({
-            message: "OTP required",
+            message: "select mfa method",
             session: (cognitoUser as any).Session
           })
         })

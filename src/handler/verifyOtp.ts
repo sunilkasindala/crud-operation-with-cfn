@@ -19,7 +19,7 @@ export const verifyOtp = async (event: any) => {
   try {
     const body = JSON.parse(event.body);
 
-    const { username, otp, session } = body;
+    const { username, otp, session} = body;
 
     if (!username || !otp || !session) {
       return {
@@ -36,7 +36,7 @@ export const verifyOtp = async (event: any) => {
       Session: session,
       ChallengeResponses: {
         USERNAME: username,
-        ANSWER: otp
+        ANSWER: otp,
       }
     });
 

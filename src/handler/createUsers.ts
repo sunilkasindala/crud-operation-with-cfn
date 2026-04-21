@@ -67,7 +67,9 @@ export const createuser = async (
             UserAttributes: [
                 { Name: "email", Value: email },
                 { Name: "email_verified", Value: "true" },
-                { Name: "custom:mfaEnabled", Value: "false" }
+                { Name: "custom:mfaEnabled", Value: "false" },
+                { Name: "phone_number", Value: mobile_no},
+                { Name: "phone_number_verified", Value: "true"}
             ],
             MessageAction: "SUPPRESS"
         };
@@ -187,7 +189,7 @@ const triggerForEmailSend = async (body: any) => {
 }
 
 const triggerForSmsSend = async (body: any) => {
-    log.info("smsi trgger started")
+    log.info("sms trigger started")
     const params = {
         Message: `Hello ${body.name}, your account has been created successfully.`,
         PhoneNumber: body.mobile_no
