@@ -35,8 +35,12 @@ export const createAuth = async (event: any) => {
             }
             const isResend = event.request.clientMetadata?.resend === "true";
             log.info("isResend flag in create auth challenge: " + isResend)
+
+            const isReselect = event.request.clientMetadata?.mfaReselect === "true";
+            log.info("isReselect flag in create auth challenge: " + isReselect)
+
             //step2 ->  AFTER SELECT -> SEND OTP
-            if (lastchallenge.challengeMetadata === "SELECT_MFA" || isResend) {
+            if (lastchallenge.challengeMetadata === "SELECT_MFA" || isResend || isReselect) {
                 log.info("step2.1: user has selected the MFA method and now asking user to enter the OTP")
                 
                 const selectedMFA = event.request.clientMetadata?.mfaType?.toUpperCase();

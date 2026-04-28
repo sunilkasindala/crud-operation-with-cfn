@@ -17,13 +17,13 @@ export const selectMfa = async (event:any) => {
     try {
         log.info("user has to select the mfa type")
         const body = JSON.parse(event.body)
-        const {username , session , mfaType} = body
+        const {username , session , mfaType , isChangingMfa } = body
 
-        if(!username || !session || !mfaType){
+        if(!username || !session || !mfaType || !isChangingMfa === undefined){
             return {
                 statusCode: 400,
                 body: JSON.stringify({
-                    message:"username, session and mfaType are required"
+                    message:"username, session, mfaType and isChangingMfa are required"
                 })
             }
         }
@@ -37,7 +37,8 @@ export const selectMfa = async (event:any) => {
                 ANSWER: mfaType
             },
             ClientMetadata:{
-                mfaType: mfaType
+                mfaType: mfaType,
+                mfaReselect: isChangingMfa ? "true" : "false"
             }
         })
 

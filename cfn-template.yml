@@ -149,6 +149,8 @@ Resources:
                   - cognito-idp:InitiateAuth
                   - cognito-idp:AdminInitiateAuth
                   - cognito-idp:AdminUpdateUserAttributes
+                  - cognito-idp:ForgotPassword
+                  - cognito-idp:ConfirmForgotPassword
                 Resource: "*"
 
         - PolicyName: CognitoSignupPolicy
@@ -502,6 +504,45 @@ Resources:
           USER_POOL_ID: !Ref CognitoUserPool
       TracingConfig:
         Mode: Active
+  
+  ForgotPasswordLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ForgotPasswordLambda
+      Runtime: nodejs24.x
+      Handler: handler/forgotPassword.forgotPassword
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
+  
+  ConfirmPasswordLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ConfirmPasswordLambda
+      Runtime: nodejs24.x
+      Handler: handler/confirmPassword.confirmPassword
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool  
+      TracingConfig:
+        Mode: Active
+
 
 
 
@@ -625,6 +666,23 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SelectMfaTypeLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
+  
+  ForgotPasswordApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ForgotPasswordLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+  
+  ConfirmPasswordApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfirmPasswordLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+  
 
   # ---------------------------
   # Routes
@@ -714,6 +772,21 @@ Resources:
       ApiId: !Ref LambdaHttpApi
       RouteKey: POST /selectmfa
       Target: !Sub integrations/${SelectedMfaTypeApiIntegration}
+  
+  ForgotPasswordRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /forgot-password
+      Target: !Sub integrations/${ForgotPasswordApiIntegration}
+  
+  ConfirmPasswordRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /confirm-password
+      Target: !Sub integrations/${ConfirmPasswordApiIntegration}
+
   
   # ---------------------------
   # Stage
@@ -844,6 +917,22 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref SelectMfaTypeLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+
+  ForgotPasswordLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ForgotPasswordLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+  
+  ConfirmPasswordLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConfirmPasswordLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
