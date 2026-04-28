@@ -15,13 +15,13 @@ export const resendOtp = async (event: any) => {
         log.info("resend otp api is triggered")
 
         const body = JSON.parse(event.body);
-        const { username, session , mfaType} = body;
+        const { username, session } = body;
 
-        if (!username || !session || !mfaType) {
+        if (!username || !session) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
-                    message: "username, session and mfaType are required"
+                    message: "username and session are required"
                 })
             }
         }
@@ -93,8 +93,7 @@ export const resendOtp = async (event: any) => {
                 ANSWER: "resend" // dummy answer to trigger resend of OTP
             },
             ClientMetadata: {
-                resend: "true",
-                mfaType: mfaType
+                resend: "true"
             }
         })
         const response = await cognitoClient.send(command)
@@ -107,6 +106,6 @@ export const resendOtp = async (event: any) => {
             })
         }
     } catch(err){
-        log.info("error in selecting mfa type"+JSON.stringify(err))
+        log.info("error in resending otp"+JSON.stringify(err))
     }
 }

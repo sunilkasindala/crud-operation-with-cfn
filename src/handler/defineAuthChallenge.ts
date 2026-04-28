@@ -61,21 +61,44 @@ export const authChallenge = async (event: any) => {
       event.response.challengeName = "CUSTOM_CHALLENGE"
       return event;
     }
-    //step 4: if otp is success --> then issue tokens 
+    //step 4: user is reselecting the mfa type or resending the otp
     if(
-      lastChallenge && 
+      lastChallenge &&
       lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
       lastChallenge.challengeResult === true &&
       lastChallenge.challengeMetadata === "OTP_CHALLENGE"
-    ){
-      log.info("OTP verified issuing tokens")
+    )
+    {
+      const isMfaReselect = event.request.clientMetadata?.mfaReselect === "true";
 
+      if(isMfaReselect){
+        log.info("user is reslecting the mfa type -> asking user to select mfa type again")
+        event.response.issueTokens = false;
+        event.response.failAuthentication = false;
+        event.response.challengeName = "CUSTOM_CHALLENGE"
+        return event;
+      }
+      // now otp is success issue tokens 
+      log.info("otp is success issuing tokens")
       event.response.issueTokens = true;
       event.response.failAuthentication = false;
       return event;
     }
+    // //step 4: if otp is success --> then issue tokens 
+    // if(
+    //   lastChallenge && 
+    //   lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
+    //   lastChallenge.challengeResult === true &&
+    //   lastChallenge.challengeMetadata === "OTP_CHALLENGE"
+    // ){
+    //   log.info("OTP verified issuing tokens")
 
-    //Step 3.1: After OTP failure OR resend → retry challenge
+    //   event.response.issueTokens = true;
+    //   event.response.failAuthentication = false;
+    //   return event;
+    // }
+
+    //Step 4.1: After OTP failure OR resend → retry challenge
     if (
       lastChallenge &&
       lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&

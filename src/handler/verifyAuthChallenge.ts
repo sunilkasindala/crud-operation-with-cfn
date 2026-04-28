@@ -8,9 +8,12 @@ export const verifyAuth = async (event: any) => {
         log.info('verify auth is triggered')
 
         const metadata = event.request.challengeMetadata
+        const selected = event.request.challengeAnswer;// this is the mfa type selected by the user 
+        
+        const isMfaReselect = (selected === "EMAIL" || selected === "SMS") 
         //step1 --> validate mfa selection
-        if(metadata === "SELECT_MFA"){
-            const selected = event.request.challengeAnswer;// this is the mfa type selected by the user 
+        if(metadata === "SELECT_MFA" || isMfaReselect){
+            // if the user is selecting the mfa type for the first time or reselecting, we consider it as correct answer to trigger the resend flow in the next step
             if(selected === "EMAIL" || selected === "SMS"){
                 event.response.answerCorrect = true;
             }else{
