@@ -38,7 +38,7 @@ import { captureHTTPsGlobal } from "aws-xray-sdk-core";
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 
-describe.only('test cases', () => {
+describe('test cases', () => {
   beforeEach(() => {
     ddbMock.reset();
     sqsSendMock.mockClear();
@@ -46,7 +46,7 @@ describe.only('test cases', () => {
     cognitoSendMock.mockClear();
   });
 
-  describe.only('createuser lambda function', () => {
+  describe('createuser lambda function', () => {
     //test case for missing fields
     it('should return 400 if the required fields are missing', async () => {
       //arrange
@@ -177,6 +177,27 @@ describe.only('test cases', () => {
         }
       });
       cognitoSendMock.mockResolvedValueOnce({});
+      //arrange
+      const event: any = {
+        body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116", password: "password123" })
+      }
+
+      //act 
+      const result = await createuser(event)
+      //assert
+      expect(result.statusCode).toBe(500)
+      const response = JSON.parse(result.body)
+      expect(response.message).toBe("Internal server error")
+    })
+
+    it('should return 500 if Cognito sub is not found', async () => {
+      ddbMock.on(QueryCommand).resolves({ Items: [] })
+      // Mock Cognito response without sub attribute
+      cognitoSendMock.mockResolvedValueOnce({
+        User: {
+          Attributes: [] // Empty attributes, no sub
+        }
+      });
       //arrange
       const event: any = {
         body: JSON.stringify({ name: "naveen", email: "naveen@gmail.com", mobile_no: "+918328465116", password: "password123" })

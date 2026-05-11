@@ -45,7 +45,7 @@ export const forgotPassword = async (event:any) => {
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: "error in forgot password api: " + JSON.stringify(err)
+                message: "error in forgot password api:" + JSON.stringify(err)
             })
         }
     }

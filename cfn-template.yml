@@ -542,6 +542,28 @@ Resources:
           USER_POOL_ID: !Ref CognitoUserPool  
       TracingConfig:
         Mode: Active
+  
+  ForgotUsernameLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ForgotUsernameLambda
+      Runtime: nodejs24.x
+      Handler: handler/forgotUsername.forgotUsername
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USERS_TABLE: usersTable
+          COGNITO_CLIENT_ID: !Ref CognitoUserPoolClient
+          USER_POOL_ID: !Ref CognitoUserPool
+      TracingConfig:
+        Mode: Active
+
+      
 
 
 
@@ -682,7 +704,16 @@ Resources:
       IntegrationType: AWS_PROXY
       IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfirmPasswordLambdaFunction.Arn}/invocations
       PayloadFormatVersion: '2.0'
+
+  ForgotUsernameApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ForgotUsernameLambdaFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
   
+
 
   # ---------------------------
   # Routes
@@ -786,6 +817,13 @@ Resources:
       ApiId: !Ref LambdaHttpApi
       RouteKey: POST /confirm-password
       Target: !Sub integrations/${ConfirmPasswordApiIntegration}
+  
+  ForgotUsernameRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LambdaHttpApi
+      RouteKey: POST /forgot-username
+      Target: !Sub integrations/${ForgotUsernameApiIntegration}
 
   
   # ---------------------------
@@ -933,6 +971,14 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref ConfirmPasswordLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
+  
+  ForgotUsernameLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ForgotUsernameLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaHttpApi}/*/*
