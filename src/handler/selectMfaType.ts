@@ -15,7 +15,7 @@ const cognitoClient = AWSXRay.captureAWSv3Client(
 
 export const selectMfa = async (event:any) => {
     try {
-        log.info("user has to select the mfa type")
+        log.info("SelectMfa request received")
         const body = JSON.parse(event.body)
         const {username , session , mfaType , isChangingMfa } = body
 
@@ -27,7 +27,6 @@ export const selectMfa = async (event:any) => {
                 })
             }
         }
-
         const command = new RespondToAuthChallengeCommand({
             ClientId: AppConfig.COGNITO_CLIENT_ID,
             ChallengeName: "CUSTOM_CHALLENGE",
@@ -38,12 +37,12 @@ export const selectMfa = async (event:any) => {
             },
             ClientMetadata:{
                 mfaType: mfaType,
-                mfaReselect: isChangingMfa ? "true" : "false"
+                mfaReselect: isChangingMfa.toString()
             }
         })
 
         const response = await cognitoClient.send(command)
-        log.info("response from the mfa method"+JSON.stringify(response))
+        log.info(`Response from Cognito for MFA selection: ${JSON.stringify(response)}`)
 
         return {
             statusCode: 200,
@@ -54,6 +53,12 @@ export const selectMfa = async (event:any) => {
         }
 
     }catch(err){
-        log.info("error in selecting mfa type"+JSON.stringify(err))
+        log.info(`Error in selecting mfa type: ${JSON.stringify(err)}`)
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: "Internal server error"
+            })
+        }
     }
 }

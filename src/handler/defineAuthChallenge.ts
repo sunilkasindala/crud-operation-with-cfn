@@ -30,17 +30,18 @@ export const authChallenge = async (event: any) => {
       lastChallenge.challengeResult === true
 
     ) {
-      log.info("Password verified.");
-      const IsmfaEnabled = event.request.userAttributes["custom:mfaEnabled"] === "true";
+      log.info("Password verified successfully. Checking if MFA is enabled for the user.");
+
+      const isMfaEnabled = event.request.userAttributes["custom:mfaEnabled"] === "true";
       // If MFA disabled → directly issue tokens
-      if (!IsmfaEnabled) {
-        log.info("MFA disabled. Issuing tokens directly.");
+      if (!isMfaEnabled) {
+        log.info("MFA disabled for user. Issuing tokens directly.");
         event.response.issueTokens = true;
         event.response.failAuthentication = false;
         return event;
       }
       //if MFA enabled -> then ask user to select MFA 
-      log.info("MFA is enabled -> asking user to select Mfa type")
+      log.info("MFA is enabled. Asking user to select MFA type")
       event.response.issueTokens = false;
       event.response.failAuthentication = false;
       event.response.challengeName = "CUSTOM_CHALLENGE";
@@ -54,7 +55,7 @@ export const authChallenge = async (event: any) => {
       lastChallenge.challengeResult === true &&
       lastChallenge.challengeMetadata === "SELECT_MFA"
     ) {
-      log.info("selected mfa type --> move to otp");
+      log.info("Selected MFA type. Moving to OTP challenge");
 
       event.response.issueTokens = false;
       event.response.failAuthentication = false;
@@ -72,31 +73,18 @@ export const authChallenge = async (event: any) => {
       const isMfaReselect = event.request.clientMetadata?.mfaReselect === "true";
 
       if(isMfaReselect){
-        log.info("user is reslecting the mfa type -> asking user to select mfa type again")
+        log.info("user is reselecting the mfa type -> asking user to select mfa type again")
         event.response.issueTokens = false;
         event.response.failAuthentication = false;
         event.response.challengeName = "CUSTOM_CHALLENGE"
         return event;
       }
       // now otp is success issue tokens 
-      log.info("otp is success issuing tokens")
+      log.info("OTP verified successfully. Issuing tokens")
       event.response.issueTokens = true;
       event.response.failAuthentication = false;
       return event;
     }
-    // //step 4: if otp is success --> then issue tokens 
-    // if(
-    //   lastChallenge && 
-    //   lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
-    //   lastChallenge.challengeResult === true &&
-    //   lastChallenge.challengeMetadata === "OTP_CHALLENGE"
-    // ){
-    //   log.info("OTP verified issuing tokens")
-
-    //   event.response.issueTokens = true;
-    //   event.response.failAuthentication = false;
-    //   return event;
-    // }
 
     //Step 4.1: After OTP failure OR resend → retry challenge
     if (
@@ -104,17 +92,17 @@ export const authChallenge = async (event: any) => {
       lastChallenge.challengeName === "CUSTOM_CHALLENGE" &&
       lastChallenge.challengeResult === false
     ) {
-      log.info("OTP incorrect or resend triggered. Retrying challenge");
+      log.info("OTP incorrect or resend triggered. Retrying OTP challenge");
       //count the number of attempts from the session
       const failedAttempts = session.filter((challenge:any) => 
         challenge.challengeName === "CUSTOM_CHALLENGE" &&
         challenge.challengeResult === false
       ).length;
-      log.info("failed otp attempts:" + failedAttempts);
+      log.info(`Failed OTP attempts: ${failedAttempts}`);
 
       //count the number of resend attempts
       if(failedAttempts > 3){
-        log.info("maximaum otp attempts reached -> failing authentication");
+        log.info(`Maximum OTP attempts reached (${failedAttempts}). Failing authentication`);
         event.response.issueTokens = false;
         event.response.failAuthentication = true;
         return event;
@@ -127,7 +115,7 @@ export const authChallenge = async (event: any) => {
     }
 
     //Fail otherwise
-    log.info("Authentication failed");
+    log.info("Authentication failed. No valid challenge state matched");
     event.response.issueTokens = false;
     event.response.failAuthentication = true;
     return event;

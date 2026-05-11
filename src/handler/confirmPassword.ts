@@ -46,7 +46,7 @@ export const confirmPassword = async (event: any) => {
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: "error in confirm password api: " + JSON.stringify(err)
+                message: "error in confirm password api:" + JSON.stringify(err)
             })
         }
     }

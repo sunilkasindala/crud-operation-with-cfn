@@ -10,16 +10,16 @@ const sns = new SNSClient({ region: process.env.AWS_REGION })
 
 export const createAuth = async (event: any) => {
     try {
-        log.info("createauth challenge is triggered")
+        log.info("CreateAuthChallenge trigger invoked")
 
         if (event.request.challengeName === "CUSTOM_CHALLENGE") {
             const session = event.request.session || [];
-            log.info("Session in create auth challenge: " + JSON.stringify(session))
-            const lastchallenge = session[session.length - 1];
-            log.info("last challenge in create auth challenge:" + JSON.stringify(lastchallenge))
+            log.info(`Session in CreateAuthChallenge: ${JSON.stringify(session)}`)
+            const lastChallenge = session[session.length - 1];
+            log.info(`Last challenge: ${JSON.stringify(lastChallenge)}`)
 
             //STEP 1 -> ASK SELECT MFA
-            if (lastchallenge?.challengeName === "PASSWORD_VERIFIER") {
+            if (lastChallenge?.challengeName === "PASSWORD_VERIFIER") {
                 log.info("step1: asking user to select MFA method")
 
                 event.response.publicChallengeParameters = {
@@ -33,15 +33,15 @@ export const createAuth = async (event: any) => {
                 event.response.challengeMetadata = "SELECT_MFA"
                 return event;
             }
-            const isResend = event.request.clientMetadata?.resend === "true";
-            log.info("isResend flag in create auth challenge: " + isResend)
+            const isResendOtp = event.request.clientMetadata?.resend === "true";
+            log.info("isResend flag in create auth challenge: " + isResendOtp)
 
-            const isReselect = event.request.clientMetadata?.mfaReselect === "true";
-            log.info("isReselect flag in create auth challenge: " + isReselect)
+            const isReselectMfa = event.request.clientMetadata?.mfaReselect === "true";
+            log.info("isReselect flag in create auth challenge: " + isReselectMfa)
 
             //step2 ->  AFTER SELECT -> SEND OTP
-            if (lastchallenge.challengeMetadata === "SELECT_MFA" || isResend || isReselect) {
-                log.info("step2.1: user has selected the MFA method and now asking user to enter the OTP")
+            if (lastChallenge.challengeMetadata === "SELECT_MFA" || isResendOtp || isReselectMfa) {
+                log.info("step2:MFA selected. Generating and sending OTP")
                 
                 const selectedMFA = event.request.clientMetadata?.mfaType?.toUpperCase();
                 log.info("selectedMFA: " + selectedMFA)
@@ -55,13 +55,13 @@ export const createAuth = async (event: any) => {
 
 
                 const result = await saveOtpRecord(userId)
-                log.info("OTP record saved")
+                log.info(`OTP record saved for userId: ${userId}`)
 
                 //store the otp securely 
                 event.response.privateChallengeParameters = {
                     answer: otp
                 }
-                log.info('set the private challenge parameters', event.response.privateChallengeParameters.answer)
+                log.info("Private challenge parameters set with OTP")
 
                 event.response.publicChallengeParameters = {
                     destination: selectedMFA === "SMS" ? mobile_no : email
@@ -96,7 +96,7 @@ export const createAuth = async (event: any) => {
                             Message: `your otp is ${otp}`
                         })
                     )
-                    log.info("otp sent to sms succesffully")
+                    log.info("OTP sent via SMS successfully")
                     return event
                 }
             }

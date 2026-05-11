@@ -64,6 +64,27 @@ describe.only("loginHandler test cases", () => {
         expect(JSON.parse(res.body)).toEqual({message:"invalid username and password"})
     })
 
+    it("should return 404 when user is not found in database", async () => {
+    //arrange
+    const event:any = {
+        body: JSON.stringify({username:"testuser", password: "testpassword"})
+    }  
+    congitoMock.on(InitiateAuthCommand).resolves({
+        AuthenticationResult: {
+            AccessToken: "accesstoken",
+            IdToken: "id-toekn",
+            RefreshToken: "refresh-token"
+        }
+    }) ;
+    (jwt.decode as jest.Mock).mockReturnValue({sub:"test-sub"});
+    (call as jest.Mock).mockResolvedValue({Items: []});
+    //act
+    const res = await loginHandler(event);
+    //assert
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({message:"user not found in the db"})
+    })
+
     //test case for successful login 
     it("should return 200 if username and password are valid", async () => {
         //arrange

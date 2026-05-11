@@ -5,11 +5,11 @@ import { call } from "../utils/dynamodbLib";
 
 export const verifyAuth = async (event: any) => {
     try {
-        log.info('verify auth is triggered')
+        log.info("VerifyAuth trigger invoked" + JSON.stringify(event))
 
         const metadata = event.request.challengeMetadata
         const selected = event.request.challengeAnswer;// this is the mfa type selected by the user 
-        
+
         const isMfaReselect = (selected === "EMAIL" || selected === "SMS") 
         //step1 --> validate mfa selection
         if(metadata === "SELECT_MFA" || isMfaReselect){
@@ -23,16 +23,16 @@ export const verifyAuth = async (event: any) => {
         }
 
         //step2 --> resend 
-        const isResend = event.request.clientMetadata?.resend === "true";
-        log.info("verify auth is triggered, isResend: " + isResend)
+        const isResendOtp = event.request.clientMetadata?.resend === "true";
+        log.info(`isResendOtp: ${isResendOtp}`)
 
-        if(isResend){
-            log.info("Resend flow - skipping OTP verification to issue a new OTP");
+        if(isResendOtp){
+            log.info("Resend requested. Skipping OTP verification and triggering new OTP");
             event.response.answerCorrect = false;
             return event;
         }
         const userId = event.request.userAttributes.sub;
-        log.info("User ID from request: " + userId)
+        log.info(`Processing OTP verification for userId: ${userId}`)
 
         const userOtp = event.request.challengeAnswer;
         
@@ -45,7 +45,7 @@ export const verifyAuth = async (event: any) => {
         })
 
         if(!record.Item){
-            log.info("No record found for user: " + userId)
+            log.info(`No OTP record found for userId: ${userId}`)
             event.response.answerCorrect = false;// no record found, treat as incorrect answer
             return event;
         }
@@ -55,12 +55,15 @@ export const verifyAuth = async (event: any) => {
         const challengeOtp = event.request.privateChallengeParameters.answer;
 
         if (userOtp === challengeOtp) {
+            log.info("OTP verified successfully");
             event.response.answerCorrect = true;
         } else {
+            log.info("Invalid OTP entered");
             event.response.answerCorrect = false;
         }
         return event;
     } catch (err) {
-        log.info('error while verifying the otp' + JSON.stringify(err))
-    }
+    log.error("Error while verifying OTP:" + JSON.stringify(err));
+    throw err;
+}
 }

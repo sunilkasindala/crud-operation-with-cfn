@@ -9,7 +9,7 @@ import { AppConfig } from "../utils/appConfig"
 import { log } from "../utils/logger"
 
 export const authLogin = async (event: any) => {
-    log.info('triggerd custom auth login api')
+  log.info('triggerd custom auth login api')
 
   const body = JSON.parse(event.body)
   const { username, password } = body
@@ -21,14 +21,14 @@ export const authLogin = async (event: any) => {
     }
   }
 
-  const poolData:any = {
+  const poolData: any = {
     UserPoolId: AppConfig.USER_POOL_ID,
     ClientId: AppConfig.COGNITO_CLIENT_ID
   }
-  log.info('check whether pooldata is having correct id or not'+JSON.stringify(poolData))
+  log.info('check whether pooldata is having correct id or not' + JSON.stringify(poolData))
 
   const userPool = new CognitoUserPool(poolData)
-  log.info('getting the users'+JSON.stringify(userPool))
+  log.info('getting the users' + JSON.stringify(userPool))
 
   const authenticationDetails = new AuthenticationDetails({
     Username: username,
@@ -57,7 +57,7 @@ export const authLogin = async (event: any) => {
           })
         })
       },
-      
+
       customChallenge: () => {
         resolve({
           statusCode: 200,

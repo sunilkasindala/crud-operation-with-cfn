@@ -45,10 +45,6 @@ export const resendOtp = async (event: any) => {
         })
 
         const now = Date.now(); // current timestamp in milliseconds
-        //this is required when we are storing otp in the db 
-        // if (!otpData.Item) {
-        //     throw new Error("OTP not found for the user");
-        // }
 
         const lastResendTime = otpData.Item.lastResendTime || 0; // default to 0 if not set
         const resendCount = otpData.Item.resendCount || 0; // default to 0 if not set
@@ -71,7 +67,7 @@ export const resendOtp = async (event: any) => {
                 })
             }
         }
-        //update the db 
+        //update the db     
         await call("update", {
             TableName: AppConfig.OTP_TABLE,
             Key: { userId },
@@ -107,5 +103,11 @@ export const resendOtp = async (event: any) => {
         }
     } catch(err){
         log.info("error in resending otp"+JSON.stringify(err))
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: "Internal server error"
+            })
+        }
     }
 }
